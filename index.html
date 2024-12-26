@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decentralized Marketplace</title>
+    <script src="https://cdn.jsdelivr.net/npm/web3@latest/dist/web3.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+        }
+        .item {
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #007BFF;
+            color: white;
+            padding: 5px 10px;
+            border: none;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Decentralized Marketplace</h1>
+
+        <h2>List an Item</h2>
+        <input id="itemName" type="text" placeholder="Item Name" />
+        <input id="itemPrice" type="number" placeholder="Item Price (ETH)" />
+        <button id="listItemButton">List Item</button>
+
+        <h2>Marketplace Items</h2>
+        <div id="items"></div>
+        <button id="refreshButton">Refresh Items</button>
+    </div>
+
+    <script>
+        const contractAddress = "0xYourContractAddressHere";
+        const contractABI = [
+            {
+                "constant": false,
+                "inputs": [{"name": "_name", "type": "string"}, {"name": "_price", "type": "uint256"}],
+                "name": "listItem",
+                "outputs": [],
+                "type": "function"
+            },
+            {
+                "constant": false,
+                "inputs": [{"name": "_id", "type": "uint256"}],
+                "name": "purchaseItem",
+                "outputs": [],
+                "type": "function"
+            },
+            {
+                "constant": true,
+                "inputs": [{"name": "_id", "type": "uint256"}],
+                "name": "getItem",
+                "outputs": [
+                    {"name": "id", "type": "uint256"},
+                    {"name": "name", "type": "string"},
+                    {"name": "price", "type": "uint256"},
+                    {"name": "seller", "type": "address"},
+                    {"name": "buyer", "type": "address"}
+                ],
+                "type": "function"
+            }
+        ];
+
+        let web3, contract, userAccount;
+
+        async function loadWeb3() {
+            if (window.ethereum) {
+                web3 = new Web3(window.ethereum);
+                await window.ethereum.enable();
+            } else {
+                alert("Please install MetaMask to use this dApp!");
+            }
+        }
+
+        async function loadContract() {
+            contract = new web3.eth.Contract(contractABI, contractAddress);
+            const accounts = await web3.eth.getAccounts();
+            userAccount = accounts[0];
+            refreshItems();
+        }
+
+        async function listItem() {
+            const name = document.getElementById("itemName").value;
+            const price = web3.utils.toWei(document.getElementById("itemPrice").value, "ether");
+
+            try {
+                await contract.methods.listItem(name, price).send({ from: userAccount });
+                alert("Item listed successfully!");
+                refreshItems();
+            } catch (error) {
+                console.error(error);
+                alert("Error listing item. Check the console for details.");
+            }
+        }
+
+        async function purchaseItem(itemId, price) {
+            try {
+                await contract.methods.purchaseItem(itemId).send({ from: userAccount, value: price });
+                alert("Item purchased successfully!");
+                refreshItems();
+            } catch (error) {
+                console.error(error);
+                alert("Error purchasing item. Check the console for details.");
+            }
+        }
+
+        async function refreshItems() {
+            const itemsDiv = document.getElementById("items");
+            itemsDiv.innerHTML = "";
+
+            const itemCount = await contract.methods.itemCount().call();
+
+            for (let i = 1; i <= itemCount; i++) {
+                const item = await contract.methods.getItem(i).call();
+
+                if (item.buyer === "0x0000000000000000000000000000000000000000") {
+                    itemsDiv.innerHTML += `
+                        <div class="item">
+                            <p><strong>${item.name}</strong></p>
+                            <p>Price: ${web3.utils.fromWei(item.price, "ether")} ETH</p>
+                            <p>Seller: ${item.seller}</p>
+                            <button onclick="purchaseItem(${item.id}, ${item.price})">Buy</button>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        document.getElementById("listItemButton").addEventListener("click", listItem);
+        document.getElementById("refreshButton").addEventListener("click", refreshItems);
+
+        window.onload = async () => {
+            await loadWeb3();
+            await loadContract();
+        };
+    </script>
+</body>
+</html>
